@@ -1,0 +1,40 @@
+name: Build OrchardCore Embold
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Orchard Core currently targets .NET 8 and .NET 9
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          9.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore OrchardCore.sln
+
+    - name: Build
+      run: dotnet build OrchardCore.sln --no-restore --configuration Release
+
+    - name: Embold Analyse
+      run: |
+        curl ${{ vars.EMBOLD_SCANNER_URL}} -o browserstack-codequality-scanner-archive.tar.gz
+        tar xvf browserstack-codequality-scanner-archive.tar.gz
+        echo "Download and extract BrowserStack CQ Scanner done"
+        # REPLACE 'YOUR_NEW_REPO_ID_HERE' with the actual ID for OrchardCore from your Embold dashboard
+        curl --silent --location --request GET "${{ vars.EMBOLD_URL_CS}}/api/v1/repositories/64927e48695a825f6c4fbb8a369be96a/scans/config/download" --header "Authorization:Bearer ${{ secrets.EMBOLD_TOKEN_CS}}" -o repository-configuration.json
+        echo "Download repository configuration file done"
+        ./browserstack-codequality-scanner/bin/embold-scanner analyse -u ${{ vars.EMBOLD_URL_CS}} -t ${{ secrets.EMBOLD_TOKEN_CS}} -r 64927e48695a825f6c4fbb8a369be96a -b . -d ./embold-data -c ./repository-configuration.json -v
